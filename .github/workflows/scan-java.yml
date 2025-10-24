@@ -2,7 +2,6 @@
 name: Reusable Java Scan
 on:
   workflow_call:
-    # It needs parameters for the scanners
     inputs:
       sonar-project-key:
         type: string
@@ -10,7 +9,6 @@ on:
       snyk-org-slug:
         type: string
         required: true
-    # It needs secrets for the scanners
     secrets:
       SONAR_TOKEN:
         required: true
@@ -28,8 +26,6 @@ jobs:
           path: ./target
       
       - name: 2. Setup Environment (with Checkout)
-        # We MUST checkout code here, as Sonar and Snyk
-        # need the source code to perform the analysis.
         uses: ./.github/actions/setup-java-maven/action.yml
         with:
           checkout-code: 'true'
