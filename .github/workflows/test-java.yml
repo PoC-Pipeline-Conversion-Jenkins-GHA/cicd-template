@@ -20,7 +20,7 @@ jobs:
       - name: 2. Setup Environment (Cache Only)
         # We don't need to checkout code, but we need the .m2 cache
         # to avoid re-downloading all dependencies.
-        uses: ./.github/actions/setup-java-maven/action.yml
+        uses: PoC-Pipeline-Conversion-Jenkins-GHA/cicd-template/.github/actions/setup-java-maven@main
         with:
           java-version: ${{ inputs.java-version }}
           checkout-code: 'false'
