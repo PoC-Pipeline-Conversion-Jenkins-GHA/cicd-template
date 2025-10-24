@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: 1. Setup Environment
         # Use the local composite action
-        uses: PoC-Pipeline-Conversion-Jenkins-GHA/cicd-template/.github/actions/setup-java-maven/action.yml
+        uses: PoC-Pipeline-Conversion-Jenkins-GHA/cicd-template/.github/actions/setup-java-maven@main
         with:
           java-version: ${{ inputs.java-version }}
           checkout-code: 'true'
