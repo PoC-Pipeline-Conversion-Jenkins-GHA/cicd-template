@@ -114,7 +114,7 @@ jobs:
     name: "4. Sign Artifact"
     # This job is a "fan-in" point. It runs after all
     # relevant scan jobs have completed.
-    needs: [scan-java, scan-dotnet, scan-android]
+    needs: [scan-java, scan-dotnet]
     # 'if: always()' ensures this job runs to report failure,
     # but 'needs' ensures it only proceeds if upstream jobs passed.
     # A more robust check is 'if: success() || failure()'
