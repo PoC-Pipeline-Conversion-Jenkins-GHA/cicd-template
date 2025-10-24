@@ -1,0 +1,20 @@
+# This Composite Action signs a container image using Sigstore/Cosign.
+# It assumes a keyless, OIDC-based signing.
+name: 'Sign Container Image'
+description: 'Signs a container image using Sigstore/Cosign'
+
+inputs:
+  image-to-sign:
+    description: 'The full image reference to sign (e.g., ghcr.io/my-org/my-app:latest)'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: 1. Install Cosign
+      uses: sigstore/cosign-installer@v3
+
+    - name: 2. Sign the container image
+      # This uses the OIDC token from the GitHub runner
+      run: cosign sign --yes ${{ inputs.image-to-sign }}
+      shell: bash

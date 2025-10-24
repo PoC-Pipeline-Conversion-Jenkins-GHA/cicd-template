@@ -1,0 +1,150 @@
+# This is the main orchestrator (or "router") workflow.
+# It defines the 5 stages (Build, Test, Scan, Sign, Deploy)
+# and uses 'needs:' to create dependencies.
+# It uses 'if:' to fan-out to the correct technology-specific workflow.
+name: Central CI Orchestrator
+
+on:
+  workflow_call:
+    # 1. It accepts the 'pipeline_profile' from the application repo
+    inputs:
+      pipeline_profile:
+        description: 'The technology profile to run (e.g., java-openshift, dotnet, Android)'
+        type: string
+        required: true
+      
+      # 2. It accepts all other parameters to pass-through
+      sonar-project-key:
+        type: string
+      snyk-org-slug:
+        type: string
+
+    # 3. It accepts all secrets to pass-through
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      SNYK_TOKEN:
+        required: false
+      SIGNING_KEY:
+        required: false
+      OPENSHIFT_TOKEN:
+        required: false
+
+jobs:
+  # ===================================================
+  # STAGE 1: BUILD
+  # ===================================================
+  build-java:
+    name: "1. Build (Java)"
+    if: |
+      inputs.pipeline_profile == 'java-openshift' ||
+      inputs.pipeline_profile == 'java-middlewares'
+    uses: ./.github/workflows/reusables/build/java-build.yml
+    secrets: inherit # Passes secrets from on.workflow_call
+
+  build-dotnet:
+    name: "1. Build (.NET)"
+    if: inputs.pipeline_profile == '.Net'
+    uses: ./.github/workflows/reusables/build/dotnet-build.yml
+    secrets: inherit
+
+  build-android:
+    name: "1. Build (Android)"
+    if: inputs.pipeline_profile == 'Android'
+    uses: ./.github/workflows/reusables/build/android-build.yml
+    secrets: inherit
+
+  # ===================================================
+  # STAGE 2: TEST
+  # ===================================================
+  test-java:
+    name: "2. Test (Java)"
+    needs: [build-java] # Depends on the correct build job
+    if: |
+      inputs.pipeline_profile == 'java-openshift' ||
+      inputs.pipeline_profile == 'java-middlewares'
+    uses: ./.github/workflows/reusables/test/java-test.yml
+    secrets: inherit
+
+  test-dotnet:
+    name: "2. Test (.NET)"
+    needs: [build-dotnet]
+    if: inputs.pipeline_profile == '.Net'
+    uses: ./.github/workflows/reusables/test/dotnet-test.yml
+    secrets: inherit
+  
+  # (etc. for Android)
+
+  # ===================================================
+  # STAGE 3: SCAN
+  # ===================================================
+  scan-java:
+    name: "3. Scan (Java)"
+    needs: [test-java] # Depends on the test job
+    permissions:
+      security-events: write # Required to upload SARIF results
+      contents: read
+    if: |
+      inputs.pipeline_profile == 'java-openshift' ||
+      inputs.pipeline_profile == 'java-middlewares'
+    uses: ./.github/workflows/reusables/scan/java-scan.yml
+    with:
+      sonar-project-key: ${{ inputs.sonar-project-key }}
+      snyk-org-slug: ${{ inputs.snyk-org-slug }}
+    secrets:
+      # Pass only the specific secrets needed
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  scan-dotnet:
+    name: "3. Scan (.NET)"
+    needs: [test-dotnet]
+    permissions:
+      security-events: write
+      contents: read
+    if: inputs.pipeline_profile == '.Net'
+    uses: ./.github/workflows/reusables/scan/dotnet-scan.yml
+    # (pass inputs and secrets)
+    secrets: inherit
+
+  # ===================================================
+  # STAGE 4: SIGN
+  # ===================================================
+  sign:
+    name: "4. Sign Artifact"
+    # This job is a "fan-in" point. It runs after all
+    # relevant scan jobs have completed.
+    needs: [scan-java, scan-dotnet, scan-android]
+    # 'if: always()' ensures this job runs to report failure,
+    # but 'needs' ensures it only proceeds if upstream jobs passed.
+    # A more robust check is 'if: success() || failure()'
+    if: success()
+    permissions:
+      id-token: write # Required for keyless signing
+      packages: write
+    uses: ./.github/workflows/reusables/sign/sign-artifact.yml
+    with:
+      # You would need logic here to determine which artifact to sign,
+      # e.g., pass an image-ref from the build stage.
+      image-ref: 'ghcr.io/my-org/my-app:${{ github.sha }}'
+    secrets: inherit
+
+  # ===================================================
+  # STAGE 5: DEPLOY
+  # ===================================================
+  deploy-java-openshift:
+    name: "5. Deploy (Java OpenShift)"
+    needs: [sign] # Depends on the 'sign' stage
+    if: inputs.pipeline_profile == 'java-openshift'
+    uses: ./.github/workflows/reusables/deploy/java-openshift.yml
+    secrets:
+      OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+
+  deploy-middleware-nginx:
+    name: "5. Deploy (Nginx)"
+    needs: [sign]
+    if: inputs.pipeline_profile == 'middleware: Nginx'
+    uses: ./.github/workflows/reusables/deploy/middleware-nginx.yml
+    secrets: inherit # (e.g., SSH_KEY)
+
+  # (etc. for all other deploy profiles)

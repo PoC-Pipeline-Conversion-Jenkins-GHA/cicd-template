@@ -1,0 +1,37 @@
+# This Composite Action groups common setup steps for .NET projects.
+name: 'Setup .NET Environment'
+description: 'Checks out code, sets up .NET SDK, and caches NuGet packages'
+
+inputs:
+  dotnet-version:
+    description: 'Version of the .NET SDK to install'
+    required: false
+    default: '8.0.x'
+  checkout-code:
+    description: 'Set to false if checkout is not needed'
+    required: false
+    default: 'true'
+
+runs:
+  using: "composite"
+  steps:
+    - name: 1. Checkout Application Code
+      if: inputs.checkout-code == 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.repository }} 
+        ref: ${{ github.sha }}
+        fetch-depth: 0
+
+    - name: 2. Setup .NET SDK ${{ inputs.dotnet-version }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: 3. Setup NuGet Cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-

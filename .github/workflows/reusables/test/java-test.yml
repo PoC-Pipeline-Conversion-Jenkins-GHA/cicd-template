@@ -1,0 +1,30 @@
+# This workflow is responsible for TESTING a Java project.
+name: Reusable Java Test
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        type: string
+        default: '17'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: java-artifact
+          path: ./target
+
+      - name: 2. Setup Environment (Cache Only)
+        # We don't need to checkout code, but we need the .m2 cache
+        # to avoid re-downloading all dependencies.
+        uses: ./.github/actions/setup-java-maven/action.yml
+        with:
+          java-version: ${{ inputs.java-version }}
+          checkout-code: 'false'
+
+      - name: 3. Run Tests
+        # Run only the 'test' phase. Assumes 'package' was done in build.
+        run: mvn -B test

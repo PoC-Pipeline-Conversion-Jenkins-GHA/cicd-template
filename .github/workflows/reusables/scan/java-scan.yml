@@ -1,0 +1,64 @@
+# This workflow is responsible for SCANNING a Java project.
+name: Reusable Java Scan
+on:
+  workflow_call:
+    # It needs parameters for the scanners
+    inputs:
+      sonar-project-key:
+        type: string
+        required: true
+      snyk-org-slug:
+        type: string
+        required: true
+    # It needs secrets for the scanners
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      SNYK_TOKEN:
+        required: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: java-artifact
+          path: ./target
+      
+      - name: 2. Setup Environment (with Checkout)
+        # We MUST checkout code here, as Sonar and Snyk
+        # need the source code to perform the analysis.
+        uses: ./.github/actions/setup-java-maven/action.yml
+        with:
+          checkout-code: 'true'
+
+      - name: 3. Run SonarCloud Scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          # 'verify' re-builds just enough to make Sonar work
+          mvn -B verify sonar:sonar \
+            -Dsonar.organization=YOUR-SONAR-ORG-KEY \
+            -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+
+      - name: 4. Install Snyk CLI
+        uses: snyk/actions/setup@master
+
+      - name: 5. Run Snyk Scan
+        continue-on-error: true # Don't fail the build, just report
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          snyk test --sarif-file-output=snyk-oss.sarif --org=${{ inputs.snyk-org-slug }} || true
+          snyk code test --sarif-file-output=snyk-code.sarif --org=${{ inputs.snyk-org-slug }} || true
+          
+      - name: 6. Upload SARIF Results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: |
+            snyk-oss.sarif
+            snyk-code.sarif

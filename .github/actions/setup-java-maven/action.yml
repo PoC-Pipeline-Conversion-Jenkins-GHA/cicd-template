@@ -1,0 +1,43 @@
+# This Composite Action groups common setup steps for Java/Maven projects.
+name: 'Setup Java & Maven Environment'
+description: 'Checks out code, sets up JDK 17, and caches Maven dependencies'
+
+inputs:
+  java-version:
+    description: 'Version of the JDK to install'
+    required: false
+    default: '17'
+  
+  checkout-code:
+    description: 'Set to false if checkout is not needed (e.g., for test/scan jobs)'
+    required: false
+    default: 'true'
+
+runs:
+  using: "composite"
+  steps:
+    - name: 1. Checkout Application Code
+      if: inputs.checkout-code == 'true'
+      uses: actions/checkout@v4
+      with:
+        # This is critical:
+        # It checks out the code from the REPOSITORY THAT CALLED the orchestrator,
+        # not the repo where this workflow lives.
+        repository: ${{ github.repository }} 
+        ref: ${{ github.sha }}
+        # fetch-depth: 0 is required for SonarCloud to analyze PRs correctly
+        fetch-depth: 0 
+
+    - name: 2. Setup JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+
+    - name: 3. Setup Maven Cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
