@@ -143,7 +143,7 @@ jobs:
   deploy-middleware-nginx:
     name: "5. Deploy (Nginx)"
     needs: [sign]
-    if: inputs.pipeline_profile == 'middleware: Nginx'
+    if: inputs.pipeline_profile == 'middleware:Nginx'
     uses: ./.github/workflows/reusables/deploy/middleware-nginx.yml
     secrets: inherit # (e.g., SSH_KEY)
 
