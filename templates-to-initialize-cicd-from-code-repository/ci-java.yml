@@ -1,0 +1,63 @@
+# This workflow is the single CI entrypoint for the application repository.
+# Its only job is to call the central orchestrator and pass
+# the correct parameters and secrets.
+
+name: Application CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # This job calls the central reusable orchestrator
+  call-central-orchestrator:
+    name: Call Central CI Orchestrator.
+    
+    # 1. PERMISSIONS
+    # These permissions are CRITICAL. This job must possess
+    # all permissions that the downstream reusable workflows
+    # (build, scan, sign, deploy) will need.
+    permissions:
+      contents: read           # To allow checkout
+      id-token: write          # For OIDC (e.g., Cosign sign, Azure/AWS deploy)
+      packages: write          # To push packages (e.g., container images to GHCR)
+      security-events: write   # To upload SARIF files (Snyk, Sonar)
+
+    # 2. THE CALL
+    # This points to your central CICD repository and the orchestrator file.
+    # IMPORTANT: Replace 'tu-organizacion' and '@main' (use a version tag like @v1.0.0)
+    uses: PoC-Pipeline-Conversion-Jenkins-GHA/cicd-template/.github/workflows/orchestrator.yml@main
+    
+    # 3. INPUTS (with:)
+    # These are the parameters you pass to the orchestrator.
+    with:
+      # This is the "profile key" from your list.
+      # The orchestrator uses this to route to the correct jobs.
+      #pipeline_profile: 'java-openshift'
+      pipeline_profile: 'tomcat'
+      artifact-name: 'mi-aplicacion-web' # (Esto se usa para 'artifact-name')
+      tomcat-host: ${{ secrets.TOMCAT_HOST }} # El host se guarda como un secret
+      tomcat-user: 'ec2-user'
+      target-war-name: 'mi-app.war'
+      tomcat-webapps-path: '/opt/tomcat/webapps'
+      
+      # Pass-through parameters required by downstream stages (like scan)
+      sonar-project-key: 'my-java-app-sonar-key'
+      snyk-org-slug: 'my-snyk-org'
+
+    # 4. SECRETS
+    # You must pass secrets EXPLICITLY.
+    # This is more secure than 'secrets: inherit'.
+    secrets:
+      # Secrets for the 'scan' stage
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      
+      # Secrets for the 'sign' stage (if needed)
+      # SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      
+      # Secrets for the 'deploy' stage
+      # OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+      # (Add other deploy secrets as needed, e.g., AWS_ROLE, AZURE_CREDS)

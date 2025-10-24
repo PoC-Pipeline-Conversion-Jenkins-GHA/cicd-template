@@ -9,7 +9,7 @@ on:
     # 1. It accepts the 'pipeline_profile' from the application repo
     inputs:
       pipeline_profile:
-        description: 'The technology profile to run (e.g., java-openshift, dotnet, Android)'
+        description: 'The technology profile to run (e.g., java-openshift, dotnet, Android, tomcat)'
         type: string
         required: true
       
@@ -18,6 +18,32 @@ on:
         type: string
       snyk-org-slug:
         type: string
+
+      runner-label:
+        description: 'The label of the runner to use (e.g., ubuntu-latest, self-hosted)'
+        type: string
+        required: false
+        default: 'ubuntu-latest' # Provide a safe default
+      artifact-name:
+        type: string
+        required: false
+        default: "mi-aplicacion-web-war"
+      java-version:
+        type: string
+        required: false
+        default: "17"
+      tomcat-host:
+        type: string
+        required: false
+      tomcat-user:
+        type: string
+        required: false
+      target-war-name:
+        type: string
+        required: false
+      tomcat-webapps-path:
+        type: string
+        required: false
 
     # 3. It accepts all secrets to pass-through
     secrets:
@@ -28,6 +54,8 @@ on:
       SIGNING_KEY:
         required: false
       OPENSHIFT_TOKEN:
+        required: false
+      SSH_PRIVATE_KEY:
         required: false
 
 jobs:
@@ -40,6 +68,20 @@ jobs:
       inputs.pipeline_profile == 'java-openshift' ||
       inputs.pipeline_profile == 'java-middlewares'
     uses: ./.github/workflows/build-java.yml
+    with:
+      runner-label: ${{ inputs.runner-label }}
+    secrets: inherit # Passes secrets from on.workflow_call
+
+  build-tomcat:
+    name: "1. Build (Tomcat)"
+    if: |
+      inputs.pipeline_profile == 'tomcat'
+    uses: ./.github/workflows/build-java-war.yml
+    with:
+      artifact-name: ${{ inputs.artifact-name }}
+      java-version: ${{ inputs.java-version }}
+      with:
+      runner-label: ${{ inputs.runner-label }}
     secrets: inherit # Passes secrets from on.workflow_call
 
   # build-dotnet:
@@ -146,5 +188,25 @@ jobs:
   #   if: inputs.pipeline_profile == 'middleware:Nginx'
   #   uses: ./.github/workflows/deploy-middleware-nginx.yml
   #   secrets: inherit # (e.g., SSH_KEY)
+  deploy-tomcat:
+    name: "5. Deploy to Tomcat"
+    needs: [build-tomcat] # Or the previous stage
+    if: inputs.pipeline_profile == 'tomcat'
+    # Call the child workflow (the Tomcat deployer)
+    uses: ./.github/workflows/deploy-tomcat-ssh.yml
+    # The 'with:' section maps the inputs
+    with:
+      # Mapping: <child_input> : <value_received_by_orchestrator>
+      runner-label: ${{ inputs.runner-label }}
+      artifact-name: ${{ inputs.project-name }}-war
+      tomcat-host: ${{ inputs.tomcat-host }}
+      tomcat-user: ${{ inputs.tomcat-user }}
+      tomcat-webapps-path: ${{ inputs.tomcat-webapps-path }}
+      target-war-name: ${{ inputs.target-war-name }}
+      # (tomcat-service-name will use its 'default' in the child)
+    # The 'secrets:' section maps the secrets
+    secrets:
+      # Mapping: <child_secret> : <secret_received_by_orchestrator>
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
   # (etc. for all other deploy profiles)

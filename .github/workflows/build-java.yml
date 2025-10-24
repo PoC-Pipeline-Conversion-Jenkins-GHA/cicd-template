@@ -6,10 +6,13 @@ on:
       java-version:
         type: string
         default: '17'
+      runner-label:
+        type: string
+        required: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner-label }}
     steps:
       - name: 1. Setup Environment
         # Use the local composite action

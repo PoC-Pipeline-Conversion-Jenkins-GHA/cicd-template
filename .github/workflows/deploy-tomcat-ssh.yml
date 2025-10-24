@@ -1,0 +1,85 @@
+# This workflow deploys a .war artifact to a Tomcat server via SSH/SCP.
+name: Reusable Tomcat SSH Deploy
+on:
+  workflow_call:
+    inputs:
+      runner-label:
+        type: string
+        required: true
+      artifact-name:
+        type: string
+        required: true
+      tomcat-host:
+        type: string
+        required: true
+      tomcat-user:
+        type: string
+        required: true
+      tomcat-webapps-path:
+        description: 'e.g., /opt/tomcat/webapps'
+        type: string
+        required: true
+      target-war-name:
+        description: 'The final name of the .war on the server (e.g., hellotomcat.war)'
+        type: string
+        required: true
+      tomcat-service-name:
+        description: 'The name of the systemd service (e.g., tomcat)'
+        type: string
+        required: false
+        default: 'tomcat'
+        
+    secrets:
+      SSH_PRIVATE_KEY:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ${{ inputs.runner-label }}
+    steps:
+      - name: 1. Download built WAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ./artifact
+
+      - name: 2. Setup SSH Key
+        uses: tu-organizacion/central-cicd-repo/.github/actions/setup-ssh-key@main
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key-filename: 'deploy_key.pem'
+
+      - name: 3. Upload WAR to EC2 (home directory)
+        run: |
+          echo "Uploading WAR to server..."
+          scp -o StrictHostKeyChecking=no -i deploy_key.pem ./artifact/*.war \
+            ${{ inputs.tomcat-user }}@${{ inputs.tomcat-host }}:/home/${{ inputs.tomcat-user }}/
+
+      - name: 4. Deploy WAR into Tomcat
+        run: |
+          echo "Deploying WAR in Tomcat..."
+          ssh -o StrictHostKeyChecking=no -i deploy_key.pem ${{ inputs.tomcat-user }}@${{ inputs.tomcat-host }} << 'EOF'
+            
+            # Make paths dynamic based on inputs
+            WAR_NAME="${{ inputs.target-war-name }}"
+            TOMCAT_PATH="${{ inputs.tomcat-webapps-path }}"
+            SERVICE_NAME="${{ inputs.tomcat-service-name }}"
+            USER_HOME="/home/${{ inputs.tomcat-user }}"
+
+            echo "Stopping $SERVICE_NAME..."
+            sudo systemctl stop $SERVICE_NAME
+            
+            echo "Removing old application files..."
+            sudo rm -rf $TOMCAT_PATH/$(basename $WAR_NAME .war) $TOMCAT_PATH/$WAR_NAME
+            
+            echo "Moving new WAR file to webapps..."
+            sudo mv $USER_HOME/*.war $TOMCAT_PATH/$WAR_NAME
+            
+            echo "Setting permissions..."
+            sudo chown tomcat:tomcat $TOMCAT_PATH/$WAR_NAME
+            
+            echo "Starting $SERVICE_NAME..."
+            sudo systemctl start $SERVICE_NAME
+            sleep 5
+            sudo systemctl status $SERVICE_NAME --no-pager
+          EOF
