@@ -81,7 +81,7 @@ jobs:
       artifact-name: ${{ inputs.artifact-name }}
       java-version: ${{ inputs.java-version }}
       with:
-      runner-label: ${{ inputs.runner-label }}
+        runner-label: ${{ inputs.runner-label }}
     secrets: inherit # Passes secrets from on.workflow_call
 
   # build-dotnet:
