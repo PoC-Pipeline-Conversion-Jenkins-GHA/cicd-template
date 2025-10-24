@@ -23,7 +23,7 @@ jobs:
         uses: PoC-Pipeline-Conversion-Jenkins-GHA/cicd-template/.github/actions/setup-java-maven@main
         with:
           java-version: ${{ inputs.java-version }}
-          checkout-code: 'false'
+          checkout-code: 'true'
 
       - name: 3. Run Tests
         # Run only the 'test' phase. Assumes 'package' was done in build.
