@@ -1,27 +1,32 @@
-Central CI/CD Workflow Repository
+# 🏗️ Central CI/CD Workflow Repository
 
-This repository is the centralized source of truth for all CI/CD pipelines used within the organization. It provides a library of reusable, secure, and standardized workflows and actions for building, testing, scanning, and deploying applications.
+**Centralized source of truth for all CI/CD pipelines** used within the organization.  
+This repository provides a library of **reusable, secure, and standardized workflows and actions** for building, testing, scanning, and deploying applications.
 
-The primary goal of this repository is to enforce governance, security, and maintainability by abstracting CI/CD logic away from individual application repositories.
+> 🎯 **Goal:** Enforce governance, security, and maintainability by abstracting CI/CD logic away from individual application repositories.
 
-Architecture Overview
+---
 
-This repository uses a "Stage-based Fan-out" architecture.
+## 🧩 Architecture Overview
 
-Application Repo: An application (e.g., my-java-app) defines a single .github/workflows/main-ci.yml file.
+This repository implements a **Stage-based Fan-out architecture**.
 
-Orchestrator: The application calls the main orchestrator.yml workflow in this repository.
+### 🧱 Components
 
-Routing: The orchestrator.yml reads the pipeline_profile input (e.g., java-openshift) and defines the stages (build, test, scan, sign, deploy) using needs: dependencies.
+| Component | Description |
+|------------|--------------|
+| **Application Repo** | Defines a single workflow file (`.github/workflows/main-ci.yml`). |
+| **Orchestrator** | Central `orchestrator.yml` workflow that routes based on profile. |
+| **Routing** | Reads `pipeline_profile` input (e.g., `java-openshift`) to define stages. |
+| **Fan-out** | Each stage (build, test, scan, etc.) runs the correct job conditionally. |
+| **Reusable Workflows** | Versioned YAML files with specific logic (e.g., `1-build-java.yml`). |
+| **Composite Actions** | Setup actions (e.g., `setup-java-maven`) used by workflows. |
 
-Fan-out: Each stage (e.g., build) is a collection of jobs (e.g., build-java, build-dotnet). An if: condition activates the correct job based on the profile.
+---
 
-Reusable Workflows: Each job (e.g., build-java) calls a specific, versioned reusable workflow (e.g., 1-build-java.yml) that contains the actual logic for that stage and technology.
+### 🔄 Visual Flow
 
-Composite Actions: The reusable workflows use actions/ (e.g., setup-java-maven) to configure the runner environment.
-
-Visual Flow:
-
+```
 [App Repo: ci.yml]
       |
       V
@@ -38,14 +43,17 @@ Visual Flow:
                                                                           |
                                                                           V
                                                                     [deploy-...]
+```
 
+---
 
-How to Use (For Application Developers)
+## 🚀 How to Use (For Application Developers)
 
-Do not add complex logic to your application repository. Instead, create a single workflow file that calls this repository's orchestrator.
+Create a single workflow in your app repository that **delegates** to the central orchestrator.
 
-File: your-app-repo/.github/workflows/main-ci.yml
+**File:** `your-app-repo/.github/workflows/main-ci.yml`
 
+```yaml
 name: Application CI/CD
 
 on:
@@ -57,134 +65,120 @@ on:
 jobs:
   call-orchestrator:
     name: Call Central CI Orchestrator
-    
-    # Permissions required to delegate to the reusable workflows
+
     permissions:
       contents: read
-      id-token: write      # For OIDC authentication (e.g., Sign, Deploy)
-      packages: write      # For publishing artifacts
-      security-events: write # For uploading scan results
+      id-token: write
+      packages: write
+      security-events: write
 
-    # 1. CALL THE ORCHESTRATOR
-    #    Replace 'tu-organizacion' and use a version tag (e.g., @v1.0.0)
-    uses: tu-organizacion/central-cicd-repo/.github/workflows/orchestrator.yml@main
+    uses: tu-organizacion/central-cicd-repo/.github/workflows/orchestrator.yml@v1.0.0
     
-    # 2. PROVIDE INPUTS (with:)
-    #    Define WHAT pipeline to run and provide its parameters.
     with:
-      # --- REQUIRED ---
-      # See 'Available Pipeline Profiles' below
-      pipeline_profile: 'java-openshift' 
-      
-      # --- Parameters for this profile ---
+      pipeline_profile: 'java-openshift'
       sonar-project-key: 'my-app-sonar-key'
       snyk-org-slug: 'my-snyk-org'
-      # (Add other inputs as required by the profile)
 
-    # 3. PASS SECRETS
-    #    Pass only the secrets required by your chosen profile.
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN_FOR_DEPLOY }}
+```
 
+---
 
-Repository Structure
+## 🗂️ Repository Structure
 
-This repository is organized into two main components:
-
+```
 central-cicd-repo/
 ├── .github/
-│   │
 │   ├── actions/
-│   │   # ... (Composite Actions: "Reusable tool setups")
-│   │
+│   │   └── setup-java-maven/ (Composite Actions)
 │   └── workflows/
-│       │
-│       ├── orchestrator.yml    # (Main entry point. Defines stages and routes.)
-│       │
-│       # --- Reusable Workflows (Flattened by stage) ---
+│       ├── orchestrator.yml
 │       ├── 1-build-java.yml
 │       ├── 2-test-java.yml
 │       ├── 3-scan-java.yml
 │       ├── 4-sign-artifact.yml
 │       ├── 5-deploy-java-openshift.yml
-│       └── ... (etc.)
-│
+│       └── ...
 └── README.md
+```
 
+**Descriptions:**
+- **actions/** → Tool setup composite actions.
+- **workflows/** → Reusable workflows.
+- **orchestrator.yml** → Main entry point (“brain”).
+- **1-build-*.yml**, **2-test-*.yml**, etc. → Stage definitions per technology.
 
-actions/: Contains Composite Actions. These are "tool" configurations (e.g., setup-java-maven). They prepare the runner but do not execute major logic.
+---
 
-workflows/: Contains Reusable Workflows.
+## 🧮 Available Pipeline Profiles (`pipeline_profile`)
 
-orchestrator.yml: The "brain" or "router". It is the only workflow intended to be called by external application repositories.
+| Profile | Description |
+|----------|--------------|
+| `java-openshift` | Java app deployed to OpenShift |
+| `java-middlewares` | Java middleware services |
+| `.Net` | .NET applications |
+| `android` | Android builds |
+| `ios` | iOS apps |
+| `javascript` | Node.js / JS apps |
+| `sql` / `nosql` | Database pipelines |
+| `vendor-binary` | Vendor binary deployments |
+| `middleware: nginx` | NGINX middleware |
+| `kafka` | Kafka microservices |
+| ... | (Add new profiles as needed) |
 
-1-build-*.yml, 2-test-*.yml, etc.: These are the "processes" or "stages". They are called by the orchestrator and define the logic for a specific stage (e.g., "build Java") by using the actions/ tools.
+---
 
-Available Pipeline Profiles (pipeline_profile)
+## 🧑‍💻 How to Contribute (For Platform Team)
 
-This is the "menu" of available end-to-end pipelines. Pass one of these values in your main-ci.yml:
+To add a new pipeline (e.g., **python-django**):
 
-java-openshift
+1. **Create Composite Actions**
+   - `actions/setup-python/action.yml` for Python setup (pip, cache, etc.)
 
-java-middlewares
+2. **Add Reusable Workflows**
+   - `1-build-python.yml`
+   - `2-test-python.yml`
+   - `3-scan-python.yml`
+   - `5-deploy-python-django.yml`
 
-.Net
+3. **Update Orchestrator**
+   - Add jobs: `build-python`, `test-python`, etc.
+   - Include conditions:
+     ```yaml
+     if: inputs.pipeline_profile == 'python-django'
+     ```
+   - Define dependencies using `needs:`.
 
-Android
+4. **Documentation**
+   - Add the new profile to this README.
 
-iOS
+5. **Versioning**
+   - Create a new tag (e.g., `v1.1.0`).
 
-javascript
+---
 
-sql / no SQL
+## 🏷️ Versioning Best Practices
 
-Vendor binary
-
-middleware: Nginx
-
-Kafka
-
-(...add other profiles as they are built...)
-
-How to Contribute (For Platform Team)
-
-To add a new pipeline (e.g., python-django):
-
-Actions: Create a new actions/setup-python/action.yml (if it doesn't exist) to install Python, pip, and cache dependencies.
-
-Reusable Workflows: Create the new stage workflows in the workflows/ directory:
-
-1-build-python.yml
-
-2-test-python.yml
-
-3-scan-python.yml (e.g., using Snyk, Bandit)
-
-5-deploy-python-django.yml
-
-Orchestrator: Edit orchestrator.yml to add the new logic:
-
-Add new build-python, test-python, scan-python, deploy-python-django jobs.
-
-Add the needs: dependencies for each new job.
-
-Add the if: inputs.pipeline_profile == 'python-django' condition to each new job.
-
-Ensure the uses: path points to the new workflow files (e.t., uses: ./.github/workflows/1-build-python.yml).
-
-Documentation: Add python-django to the "Available Pipeline Profiles" list in this README.md.
-
-Versioning: Create a new version tag (e.g., v1.1.0) for the repository so applications can start using the new profile.
-
-Versioning Best Practices
-
-Application repositories SHOULD NOT call the orchestrator using @main. This is unstable and can break builds during development.
-
-DO NOT DO THIS:
+**❌ Don’t use unstable references:**
+```yaml
 uses: tu-organizacion/central-cicd-repo/.github/workflows/orchestrator.yml@main
+```
 
-DO THIS:
-Use a stable version tag (e.g., @v1.0.0). This ensures that application builds are stable and only update their CI/CD process when they are ready.
+**✅ Use stable tags:**
+```yaml
 uses: tu-organizacion/central-cicd-repo/.github/workflows/orchestrator.yml@v1.0.0
+```
+
+> This ensures consistent builds and controlled upgrades.
+
+---
+
+## 🧠 Summary
+
+- Centralized CI/CD logic for consistency and governance.  
+- Reusable, secure workflows per technology.  
+- Versioned orchestration for reliable delivery.  
+- Extensible and easy to maintain.
